@@ -19,6 +19,8 @@ import math
 from tensorflow.examples.tutorials.mnist import input_data as mnist_data
 print("Tensorflow version " + tf.__version__)
 tf.set_random_seed(0)
+sess = tf.Session()
+
 
 # Download images and labels into mnist.test (10K images+labels) and mnist.train (60K images+labels)
 mnist = mnist_data.read_data_sets("data", one_hot=True, reshape=False, validation_size=0)
@@ -86,10 +88,12 @@ Y = tf.nn.softmax(Ylogits)
 # problems with log(0) which is NaN
 cross_entropy = tf.nn.softmax_cross_entropy_with_logits(logits=Ylogits, labels=Y_)
 cross_entropy = tf.reduce_mean(cross_entropy)*100
+tf.summary.scalar("loss",cross_entropy)
 
 # accuracy of the trained model, between 0 (worst) and 1 (best)
 correct_prediction = tf.equal(tf.argmax(Y, 1), tf.argmax(Y_, 1))
 accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+tf.summary.scalar("accuracy",accuracy)
 
 # matplotlib visualisation
 allweights = tf.concat([tf.reshape(W1, [-1]), tf.reshape(W2, [-1]), tf.reshape(W3, [-1]), tf.reshape(W4, [-1]), tf.reshape(W5, [-1])], 0)
@@ -101,9 +105,16 @@ datavis = tensorflowvisu.MnistDataVis()
 # training step, the learning rate is a placeholder
 train_step = tf.train.AdamOptimizer(lr).minimize(cross_entropy)
 
+# mergerd summary
+
 # init
-init = tf.global_variables_initializer()
+logdir ="log2"
 sess = tf.Session()
+merged=tf.summary.merge_all()
+writer=tf.summary.FileWriter(logdir,sess.graph)
+#train_writer = tf.summary.FileWriter(logdir+"/train",sess.graph)
+#test_writer =tf.summary.FileWriter(logdir+"/test")
+init = tf.global_variables_initializer()
 sess.run(init)
 
 
@@ -121,7 +132,8 @@ def training_step(i, update_test_data, update_train_data):
 
     # compute training values for visualisation
     if update_train_data:
-        a, c, im, w, b = sess.run([accuracy, cross_entropy, I, allweights, allbiases], {X: batch_X, Y_: batch_Y, pkeep: 1.0})
+        m,a, c, im, w, b = sess.run([merged,accuracy, cross_entropy, I, allweights, allbiases], {X: batch_X, Y_: batch_Y, pkeep: 1.0})
+        writer.add_summary(m,i)
         print(str(i) + ": accuracy:" + str(a) + " loss: " + str(c) + " (lr:" + str(learning_rate) + ")")
         datavis.append_training_curves_data(i, a, c)
         datavis.update_image1(im)
@@ -141,7 +153,8 @@ def training_step(i, update_test_data, update_train_data):
 
 # to save the animation as a movie, add save_movie=True as an argument to datavis.animate
 # to disable the visualisation use the following line instead of the datavis.animate line
-for i in range(10000+1): training_step(i, i % 100 == 0, i % 20 == 0)
+for i in range(10000+1):
+    training_step(i, i % 100 == 0, i % 20 == 0)
 
 print("max test accuracy: " + str(datavis.get_max_test_accuracy()))
 
